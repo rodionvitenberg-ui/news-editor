@@ -123,7 +123,13 @@ export default function NewsDetailPage() {
           <article className="news-detail__article">
             <h1 className="news-detail__title">{news.title}</h1>
             <time className="news-detail__date">
-              {new Date(news.publishAt).toLocaleDateString('ru-RU')}
+              {new Date(news.publishAt).toLocaleString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </time>
 
             {isAuthor && (

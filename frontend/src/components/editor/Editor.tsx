@@ -117,7 +117,10 @@ export function Editor({ onSaved, initialNews }: EditorProps) {
       if (action === 'publishNow') {
         body.publishNow = true;
       } else if (action === 'schedule') {
-        body.publishAt = publishAt; // 'YYYY-MM-DDTHH:mm' — бэкенд сделает new Date(publishAt)
+        // Строку datetime-local ('YYYY-MM-DDTHH:mm', без таймзоны) браузер парсит
+        // как ЛОКАЛЬНОЕ время юзера; toISOString() переводит её в абсолютный UTC.
+        // Так бэкенд получает однозначный момент, независимо от своей таймзоны.
+        body.publishAt = new Date(publishAt).toISOString();
       }
       // draft: без publishNow/publishAt — чистый черновик (status 'draft').
 

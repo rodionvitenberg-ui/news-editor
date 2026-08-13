@@ -47,11 +47,17 @@ function getStatusBadge(item: News): { label: string; className: string } {
   return { label: 'Черновик', className: 'badge badge--draft' };
 }
 
-/** Человеческая дата публикации. */
+/** Человеческая дата публикации (с временем, по локальной таймзоне юзера). */
 function formatDate(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('ru-RU');
+  return d.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function NewsCard({ item, isMyView, isScheduledView = false, onDeleted }: NewsCardProps) {
