@@ -12,6 +12,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useNotifications } from './NotificationsProvider';
 
 /** Человекочитаемая подпись для типа события. */
@@ -66,11 +67,29 @@ export function Bell() {
             <ul className="bell__list">
               {notifications.map((n) => (
                 <li key={n.id} className="bell__item">
-                  <span className={`bell__kind bell__kind--${n.kind}`}>{KIND_LABEL[n.kind]}</span>
-                  <span className="bell__title">{n.title}</span>
-                  <time className="bell__time">
-                    {new Date(n.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                  </time>
+                  {/* Уведомление кликабельно: переходим на страницу новости.
+                      Для удалённой новости (deleted) страницы уже нет — обычная строка. */}
+                  {n.kind !== 'deleted' ? (
+                    <Link
+                      href={`/news/${n.newsId}`}
+                      className="bell__link"
+                      onClick={() => setOpen(false)}
+                    >
+                      <span className={`bell__kind bell__kind--${n.kind}`}>{KIND_LABEL[n.kind]}</span>
+                      <span className="bell__title">{n.title}</span>
+                      <time className="bell__time">
+                        {new Date(n.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      </time>
+                    </Link>
+                  ) : (
+                    <>
+                      <span className={`bell__kind bell__kind--${n.kind}`}>{KIND_LABEL[n.kind]}</span>
+                      <span className="bell__title">{n.title}</span>
+                      <time className="bell__time">
+                        {new Date(n.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      </time>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

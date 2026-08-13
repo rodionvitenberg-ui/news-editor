@@ -838,6 +838,30 @@
   font-size: 13px;
 }
 
+/* Кликабельная строка уведомления: ведёт на страницу новости (Bell.tsx) */
+.bell__link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: $text-primary;
+  text-decoration: none;
+  border-radius: $radius;
+
+  &:hover {
+    color: $accent;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: 2px;
+  }
+}
+
+.bell__link .bell__title {
+  color: inherit;
+}
+
 .bell__kind {
   font-weight: 600;
   font-size: 12px;

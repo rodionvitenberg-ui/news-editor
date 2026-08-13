@@ -23,6 +23,8 @@ const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 /** Уведомление в колокольчике. */
 export interface NotificationItem {
   id: string;
+  /** id самой новости — нужен для перехода на страницу новости по клику. */
+  newsId: string;
   kind: 'created' | 'updated' | 'deleted';
   title: string;
   at: string; // ISO date
@@ -55,7 +57,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     /** Общий обработчик: добавляет уведомление в начало списка. */
     function pushNotification(kind: NotificationItem['kind'], data: NewsSocketEvent) {
       setNotifications((prev) => [
-        { id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, kind, title: data.title, at: new Date().toISOString() },
+        {
+          id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          newsId: data.id, // id новости из события — по нему переходим по клику
+          kind,
+          title: data.title,
+          at: new Date().toISOString(),
+        },
         ...prev,
       ].slice(0, 30)); // держим максимум 30 уведомлений в памяти
     }
