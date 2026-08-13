@@ -1,10 +1,12 @@
 /**
  * NewsCard — карточка новости в списке на главной странице.
  *
- * Используется в двух режимах:
+ * Используется в трёх режимах:
  * - публичный список («Все»): карточка кликабельна, показывает заголовок/дату;
  * - «Мои» (свои новости автора): дополнительно бейдж статуса и кнопки
- *   «Редактировать», «Опубликовать», «Удалить».
+ *   «Редактировать», «Опубликовать», «Удалить»;
+ * - «Отложенные»: бейдж «Отложено», но БЕЗ кнопок управления — чужие
+ *   отложенные статьи читатель видит, но редактировать не может.
  *
  * Статус выводится по правилам ADR 0001 (публикация = данные, а не таймер):
  * - publishAt в будущем → «Отложено» (скрыта до наступления даты);
@@ -22,6 +24,8 @@ interface NewsCardProps {
   item: News;
   /** Режим «Мои» — показываем статус и кнопки управления. */
   isMyView: boolean;
+  /** Режим «Отложенные» — показываем бейдж «Отложено», но без кнопок управления. */
+  isScheduledView?: boolean;
   /** Колбэк после успешного удаления (чтобы родитель убрал карточку из списка). */
   onDeleted: (id: string) => void;
 }
@@ -50,8 +54,13 @@ function formatDate(value: string): string {
   return d.toLocaleDateString('ru-RU');
 }
 
-export function NewsCard({ item, isMyView, onDeleted }: NewsCardProps) {
+export function NewsCard({ item, isMyView, isScheduledView = false, onDeleted }: NewsCardProps) {
   const badge = getStatusBadge(item);
+  // Кнопки управления (Редактировать/Опубликовать/Удалить) доступны только
+  // автору в режиме «Мои». В «Отложенных» чужие/свои отложенные показываем
+  // просто с бейджем статуса.
+  const showFooter = isMyView || isScheduledView;
+  const showActions = isMyView;
 
   /** Удаление с подтверждением; при успехе сообщаем родителю id удалённой новости. */
   async function handleDelete() {
@@ -82,21 +91,23 @@ export function NewsCard({ item, isMyView, onDeleted }: NewsCardProps) {
         <span className="news-card__date">{formatDate(item.publishAt)}</span>
       </Link>
 
-      {isMyView && (
+      {showFooter && (
         <div className="news-card__footer">
           <span className={badge.className}>{badge.label}</span>
-          <div className="news-card__actions">
-            <Link href={`/editor?id=${item._id}`} className="btn btn--ghost btn--sm">
-              Редактировать
-            </Link>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={handlePublish}>
-              Опубликовать
-            </button>
-            {/* Удаление — опасное действие, поэтому красный hover через btn--danger */}
-            <button type="button" className="btn btn--danger btn--sm news-card__delete" onClick={handleDelete}>
-              Удалить
-            </button>
-          </div>
+          {showActions && (
+            <div className="news-card__actions">
+              <Link href={`/editor?id=${item._id}`} className="btn btn--ghost btn--sm">
+                Редактировать
+              </Link>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={handlePublish}>
+                Опубликовать
+              </button>
+              {/* Удаление — опасное действие, поэтому красный hover через btn--danger */}
+              <button type="button" className="btn btn--danger btn--sm news-card__delete" onClick={handleDelete}>
+                Удалить
+              </button>
+            </div>
+          )}
         </div>
       )}
     </article>

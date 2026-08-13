@@ -29,9 +29,10 @@ export function UploadButton({ label = 'Загрузить файл', onUploaded
     try {
       const form = new FormData();
       form.append('file', file);
-      const { data } = await apiClient.post<UploadResponse>('/api/upload', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // НЕ задаём 'Content-Type' вручную: если указать 'multipart/form-data' без
+      // boundary, multer на сервере не распарсит файл (запрос вернёт ошибку).
+      // Axios сам проставит корректный 'Content-Type: multipart/form-data; boundary=...'.
+      const { data } = await apiClient.post<UploadResponse>('/api/upload', form);
       onUploaded(data);
     } catch (err) {
       const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;

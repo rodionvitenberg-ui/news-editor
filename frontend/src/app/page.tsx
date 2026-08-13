@@ -18,12 +18,21 @@ import { NewsCard } from '../components/news/NewsCard';
 import { useAuth } from '../context/AuthContext';
 import type { News, NewsListResponse } from '../types/api';
 
-type ViewMode = 'all' | 'mine';
+type ViewMode = 'all' | 'mine' | 'scheduled';
+
+/** Ключ localStorage — запоминаем, в какой вкладке был пользователь. */
+const VIEW_STORAGE_KEY = 'winbd_news_view';
 
 export default function HomePage() {
   const { user } = useAuth();
 
-  const [view, setView] = useState<ViewMode>('all');
+  // Ленивая инициализация из localStorage: при возврате со страницы новости
+  // пользователь остаётся в той же вкладке («Мои», «Отложенные» и т.д.).
+  const [view, setView] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'all';
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    return saved === 'mine' || saved === 'scheduled' ? saved : 'all';
+  });
   const [news, setNews] = useState<News[]>([]);
   const [error, setError] = useState('');
 
@@ -32,6 +41,12 @@ export default function HomePage() {
   /** Обработчик переключения вкладки: сразу сбрасываем данные на «загрузку». */
   const switchView = (next: ViewMode) => {
     setView(next);
+    // Запоминаем выбор, чтобы после возврата со статьи остаться в той же вкладке.
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // localStorage может быть недоступен (SSR/privacy) — молча игнорируем.
+    }
     setNews([]);
     setError('');
     setLoading(true);
@@ -42,14 +57,23 @@ export default function HomePage() {
    * effect перезапускается при смене вкладки или пользователя.
    */
   useEffect(() => {
-    // «Мои» без токена невозможны — грузим публичный список (без setState-в-эффекте).
-    // Кнопки «Мои» видны только авторизованным, так что для гостей view всегда 'all'.
-    const effectiveView: ViewMode = view === 'mine' && !user ? 'all' : view;
+    // Вкладки «Мои» и «Отложенные» недоступны без токена — грузим публичный список.
+    // Кнопки показаны только авторизованным, для гостей view остаётся 'all'.
+    const needsAuth = view === 'mine' || view === 'scheduled';
+    const effectiveView: ViewMode = needsAuth && !user ? 'all' : view;
 
     let cancelled = false;
 
+    // '/api/news?all=1' — свои; '?scheduled=1' — отложенные всех авторов.
+    const path =
+      effectiveView === 'mine'
+        ? '/api/news?all=1'
+        : effectiveView === 'scheduled'
+          ? '/api/news?scheduled=1'
+          : '/api/news';
+
     apiClient
-      .get<NewsListResponse>(effectiveView === 'mine' ? '/api/news?all=1' : '/api/news')
+      .get<NewsListResponse>(path)
       .then(({ data }) => {
         if (!cancelled) setNews(data.news);
       })
@@ -93,6 +117,13 @@ export default function HomePage() {
             >
               Мои
             </button>
+            <button
+              type="button"
+              className={`btn ${view === 'scheduled' ? 'btn--primary' : 'btn--secondary'}`}
+              onClick={() => switchView('scheduled')}
+            >
+              Отложенные
+            </button>
           </div>
         )}
 
@@ -101,13 +132,23 @@ export default function HomePage() {
 
         {!loading && !error && news.length === 0 && (
           <p className="muted-text">
-            {view === 'mine' ? 'У вас пока нет новостей' : 'Новостей пока нет'}
+            {view === 'mine'
+              ? 'У вас пока нет новостей'
+              : view === 'scheduled'
+                ? 'Отложенных новостей нет'
+                : 'Новостей пока нет'}
           </p>
         )}
 
         <div className="news-grid">
           {news.map((item) => (
-            <NewsCard key={item._id} item={item} isMyView={view === 'mine'} onDeleted={handleRemoved} />
+            <NewsCard
+              key={item._id}
+              item={item}
+              isMyView={view === 'mine'}
+              isScheduledView={view === 'scheduled'}
+              onDeleted={handleRemoved}
+            />
           ))}
         </div>
       </main>

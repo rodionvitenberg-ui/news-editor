@@ -100,21 +100,26 @@ async function createNews(req, res) {
  */
 async function getNews(req, res) {
   try {
-    const { all } = req.query;
-    // ?all=1 — это «свои новости»: запрос требует авторизации.
-    // Токен не прислан/невалиден → req.user отсутствует → 401.
-    if (all === '1' && !req.user) {
+    const { all, scheduled } = req.query;
+    // ?all=1 — «свои новости»; ?scheduled=1 — отложенные всех авторов.
+    // Оба режима требуют авторизации (иначе 401).
+    if ((all === '1' || scheduled === '1') && !req.user) {
       return res.status(401).json({ message: 'Доступ запрещён: токен не передан' });
     }
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
     const skip = (page - 1) * limit;
 
-    // База для запроса: если all=1 — показываем только собственные новости автора.
+    // База для запроса: all=1 — только свои; иначе без авторского фильтра.
     let filter = all === '1' ? { author: req.user.userId } : {};
 
-    // Если это публичный список (не all) — только опубликованные и с наступившей датой.
-    if (all !== '1') {
+    // ?scheduled=1 — отложенные: status published, но дата ещё НЕ наступила
+    // ($gt — строго больше now). Видны ВСЕМ авторизованным (любой автор).
+    if (scheduled === '1') {
+      filter.status = 'published';
+      filter.publishAt = { $gt: new Date() };
+    } else if (all !== '1') {
+      // Публичный список (не all и не scheduled): опубликованные с наступившей датой.
       filter.status = 'published';
       filter.publishAt = { $lte: new Date() }; // $lte — "less than or equal"
     }
@@ -157,10 +162,16 @@ async function getNewsById(req, res) {
     // isOwner истинно только если токен прислан и userId совпадает.
     const isOwner = Boolean(req.user && news.author.toString() === req.user.userId);
 
-    // Если не автор — проверяем опубликована ли и наступила ли дата.
+    // Опубликованная с наступившей датой — видна всем (включая гостей).
     const isPublic = news.status === 'published' && news.publishAt <= new Date();
 
-    if (!isOwner && !isPublic) {
+    // Отложенная (published, но дата в будущем) — видна любому АВТОРИЗОВАННОМУ
+    // пользователю, но не гостю. Черновики (status draft) — только автору.
+    const isScheduledVisible = Boolean(
+      req.user && news.status === 'published' && news.publishAt > new Date()
+    );
+
+    if (!isOwner && !isPublic && !isScheduledVisible) {
       return res.status(403).json({ message: 'Доступ запрещён: новость не опубликована' });
     }
 

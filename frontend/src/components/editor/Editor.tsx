@@ -98,30 +98,41 @@ export function Editor({ onSaved, initialNews }: EditorProps) {
     });
   }
 
-  /** Общий обработчик сохранения: publishNow — опубликовать сразу, иначе отложить/черновик. */
-  async function save(publishNow: boolean) {
+  /** Действие сохранения: черновик (без даты) / отложенная публикация (с датой) / сейчас. */
+  type SaveAction = 'draft' | 'schedule' | 'publishNow';
+
+  async function save(action: SaveAction) {
     setError('');
     setMessage('');
     setSubmitting(true);
 
     try {
-      const body: Record<string, unknown> = { title, blocks };
-      if (publishNow) {
-        body.publishNow = true;
-      } else if (publishAt) {
-        body.publishAt = publishAt; // 'YYYY-MM-DDTHH:mm' — бэкенд сделает new Date(publishAt)
+      // Отложить можно только при указанной дате.
+      if (action === 'schedule' && !publishAt) {
+        setError('Укажите дату публикации, чтобы отложить новость');
+        return;
       }
 
-      // Режим редактирования (initialNews есть) — PUT; иначе создание — POST.
+      const body: Record<string, unknown> = { title, blocks };
+      if (action === 'publishNow') {
+        body.publishNow = true;
+      } else if (action === 'schedule') {
+        body.publishAt = publishAt; // 'YYYY-MM-DDTHH:mm' — бэкенд сделает new Date(publishAt)
+      }
+      // draft: без publishNow/publishAt — чистый черновик (status 'draft').
+
       const { data } = initialNews
         ? await apiClient.put<NewsResponse>(`/api/news/${initialNews._id}`, body)
         : await apiClient.post<NewsResponse>('/api/news', body);
       onSaved(data.news._id);
-      setMessage(publishNow
-        ? 'Новость опубликована!'
-        : initialNews
-          ? 'Новость сохранена'
-          : 'Черновик сохранён (публикация отложена по дате)'
+      setMessage(
+        action === 'publishNow'
+          ? 'Новость опубликована!'
+          : action === 'schedule'
+            ? 'Новость отложена до указанной даты'
+            : initialNews
+              ? 'Новость сохранена'
+              : 'Черновик сохранён'
       );
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -133,7 +144,7 @@ export function Editor({ onSaved, initialNews }: EditorProps) {
 
   function handleDraft(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    save(false);
+    save('draft');
   }
 
   return (
@@ -249,9 +260,17 @@ export function Editor({ onSaved, initialNews }: EditorProps) {
             </button>
             <button
               type="button"
+              className="btn btn--secondary"
+              disabled={submitting}
+              onClick={() => save('schedule')}
+            >
+              {submitting ? 'Откладываем...' : 'Отложить публикацию'}
+            </button>
+            <button
+              type="button"
               className="btn btn--primary"
               disabled={submitting}
-              onClick={() => save(true)}
+              onClick={() => save('publishNow')}
             >
               {submitting ? 'Публикуем...' : 'Опубликовать сейчас'}
             </button>
