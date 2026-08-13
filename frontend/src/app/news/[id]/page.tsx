@@ -2,14 +2,20 @@
  * Страница отдельной новости.
  * Отображает заголовок, дату и блоки контента (text/image/quote/code/file).
  * Это по сути «предпросмотр» статьи для читателя.
+ *
+ * Если текущий пользователь — автор этой новости, дополнительно показываем
+ * кнопки «Редактировать» (переход в /editor?id=...) и «Удалить»
+ * (DELETE /api/news/:id + редирект на главную). Право автора проверяется
+ * и на бэкенде — UI лишь скрывает кнопки для чужих новостей.
  */
 
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Navigation } from '../../../components/Navigation';
 import { apiClient } from '../../../api/client';
+import { useAuth } from '../../../context/AuthContext';
 import type { News, NewsResponse } from '../../../types/api';
 
 /** Рендер одного блока по его типу. */
@@ -63,9 +69,13 @@ function renderBlock(block: News['blocks'][number], key: number) {
 
 export default function NewsDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user } = useAuth();
+
   const [news, setNews] = useState<News | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -78,6 +88,29 @@ export default function NewsDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Пользователь — автор, если его id совпадает с author загруженной новости.
+  const isAuthor = Boolean(user && news && user._id === news.author);
+
+  /**
+   * Удаление новости. Перед запросом — confirm (стандартный, без лишнего UI),
+   * затем DELETE и редирект на главную.
+   */
+  async function handleDelete() {
+    if (!news) return;
+    if (!window.confirm('Удалить новость навсегда?')) return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      await apiClient.delete(`/api/news/${news._id}`);
+      router.push('/');
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setError(message || 'Не удалось удалить новость');
+      setDeleting(false);
+    }
+  }
 
   return (
     <>
@@ -92,6 +125,23 @@ export default function NewsDetailPage() {
             <time className="news-detail__date">
               {new Date(news.publishAt).toLocaleDateString('ru-RU')}
             </time>
+
+            {isAuthor && (
+              <div className="news-detail__actions">
+                <a href={`/editor?id=${news._id}`} className="btn btn--secondary">
+                  Редактировать
+                </a>
+                <button
+                  type="button"
+                  className="btn btn--danger news-detail__delete"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Удаляем...' : 'Удалить'}
+                </button>
+              </div>
+            )}
+
             {news.blocks.map((block, i) => renderBlock(block, i))}
           </article>
         )}

@@ -17,7 +17,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
-import type { Block, NewsResponse } from '../../types/api';
+import type { Block, News, NewsResponse } from '../../types/api';
 import { Toolbar } from './Toolbar';
 import { BlockEditor } from './BlockEditor';
 import { BlockPreview } from './BlockPreview';
@@ -26,6 +26,8 @@ import { UploadButton } from './UploadButton';
 interface EditorProps {
   /** Колбэк после успешного сохранения/публикации (id новости). */
   onSaved: (id: string) => void;
+  /** Существующая новость — включаем режим редактирования (PUT вместо POST). */
+  initialNews?: News;
 }
 
 /** Создаёт пустой блок нужного типа с полями по умолчанию. */
@@ -46,11 +48,27 @@ function createEmptyBlock(type: Block['type']): Block {
   }
 }
 
-export function Editor({ onSaved }: EditorProps) {
-  const [title, setTitle] = useState('');
-  const [blocks, setBlocks] = useState<Block[]>([]);
+/**
+ * Переводит дату (ISO-строка или Date) в формат input[type=datetime-local]
+ * 'YYYY-MM-DDTHH:mm' по ЛОКАЛЬНОМУ времени. Если дата невалидна — пустая строка.
+ *
+ * Почему локальное время: пользователь видит дату в своей таймзоне,
+ * а datetime-local хранит именно локальные значения (без буквы Z и смещения).
+ */
+function toDatetimeLocal(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function Editor({ onSaved, initialNews }: EditorProps) {
+  // В режиме редактирования поля сразу заполняются данными существующей новости.
+  // initialNews._id используется как id для PUT-запроса при сохранении.
+  const [title, setTitle] = useState(initialNews?.title ?? '');
+  const [blocks, setBlocks] = useState<Block[]>(initialNews?.blocks ?? []);
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
-  const [publishAt, setPublishAt] = useState('');
+  const [publishAt, setPublishAt] = useState(initialNews ? toDatetimeLocal(initialNews.publishAt) : '');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -94,11 +112,16 @@ export function Editor({ onSaved }: EditorProps) {
         body.publishAt = publishAt; // 'YYYY-MM-DDTHH:mm' — бэкенд сделает new Date(publishAt)
       }
 
-      const { data } = await apiClient.post<NewsResponse>('/api/news', body);
+      // Режим редактирования (initialNews есть) — PUT; иначе создание — POST.
+      const { data } = initialNews
+        ? await apiClient.put<NewsResponse>(`/api/news/${initialNews._id}`, body)
+        : await apiClient.post<NewsResponse>('/api/news', body);
       onSaved(data.news._id);
       setMessage(publishNow
         ? 'Новость опубликована!'
-        : 'Черновик сохранён (публикация отложена по дате)'
+        : initialNews
+          ? 'Новость сохранена'
+          : 'Черновик сохранён (публикация отложена по дате)'
       );
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -115,7 +138,7 @@ export function Editor({ onSaved }: EditorProps) {
 
   return (
     <div className="editor">
-      <h1 className="editor__title">Редактор новости</h1>
+      <h1 className="editor__title">{initialNews ? 'Редактирование новости' : 'Редактор новости'}</h1>
 
       <form onSubmit={handleDraft} className="editor__form">
         <label className="field">

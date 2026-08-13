@@ -61,6 +61,18 @@
   background: transparent;
   color: $text-secondary;
 
+  // Нейтральный hover: акцент, а не красный — красный зарезервирован
+  // для действий удаления/опасности (класс btn--danger).
+  &:hover:not(:disabled) {
+    color: $accent;
+  }
+}
+
+// Опасное действие (удаление): красный появляется только здесь.
+.btn--danger {
+  background: transparent;
+  color: $text-secondary;
+
   &:hover:not(:disabled) {
     color: $danger;
   }
@@ -68,6 +80,11 @@
 
 .btn--block {
   width: 100%;
+}
+
+.btn--sm {
+  padding: 6px 10px;
+  font-size: 13px;
 }
 
 /* ===== Поля форм ===== */
@@ -183,36 +200,123 @@
   font-size: 30px;
 }
 
+.news-list__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
 .news-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
 
+// Карточка больше не <Link>, а <article>: кликабельная часть — .news-card__link.
 .news-card {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   background: $bg-surface;
   border: 1px solid $border-subtle;
   border-radius: $radius-lg;
   padding: 20px;
   color: $text-primary;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+
+  // Плавный подъём при наведении + лёгкое появление (fade-up из DESIGN.md).
+  // transition: box-shadow, transform, opacity — только изменяемые свойства.
+  transition: box-shadow 0.2s ease, transform 0.2s ease, opacity 0.25s ease;
+  animation: news-card-in 0.25s ease-out;
 
   &:hover {
     box-shadow: $shadow-card;
     transform: translateY(-2px);
-    color: $text-primary;
+  }
+}
+
+@keyframes news-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.news-card__link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: $text-primary;
+  text-decoration: none;
+  border-radius: $radius;
+
+  &:hover {
+    color: $accent;
+  }
+
+  // Доступность с клавиатуры: видимый фокус на кликабельной области карточки
+  &:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: 2px;
   }
 }
 
 .news-card__title {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 18px;
 }
 
 .news-card__date {
   font-size: 13px;
   color: $text-muted;
+}
+
+/* Подвал в режиме «Мои»: статус + кнопки */
+.news-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid $border-subtle;
+  padding-top: 12px;
+  flex-wrap: wrap;
+}
+
+.news-card__actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ===== Бейджи статусов (DESIGN.md: зелёный/синий/жёлтый) ===== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge--published {
+  background: rgba(52, 211, 153, 0.15);
+  color: $success;
+}
+
+.badge--scheduled {
+  background: rgba(79, 140, 255, 0.15);
+  color: $accent;
+}
+
+.badge--draft {
+  background: rgba(251, 191, 36, 0.15);
+  color: $warning;
 }
 
 /* ===== Детальная страница новости ===== */
@@ -238,6 +342,13 @@
   flex-direction: column;
   gap: 16px;
   margin-top: 24px;
+}
+
+/* Кнопки автора на странице новости */
+.news-detail__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ===== Блоки контента ===== */
@@ -582,6 +693,45 @@
   &:hover {
     background: $bg-elevated;
   }
+
+  // Колокольчик — это кнопка: без видимого фокуса недоступен с клавиатуры
+  &:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: 2px;
+  }
+}
+
+.bell__panel {
+  max-width: calc(100vw - 24px);
+}
+
+/* ===== Адаптивность ===== */
+@media (max-width: 640px) {
+  .nav {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .nav__links {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .news-card__footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .editor__actions {
+    flex-direction: column;
+    align-items: stretch;
+
+    .btn {
+      width: 100%;
+    }
+  }
 }
 
 .bell__btn--has {
@@ -591,6 +741,10 @@
 // better-ui/animations: не анимируем, если пользователь отключил motion
 @media (prefers-reduced-motion: reduce) {
   .bell__btn--has {
+    animation: none;
+  }
+
+  .news-card {
     animation: none;
   }
 
