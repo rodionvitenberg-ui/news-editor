@@ -21,9 +21,11 @@ export function ImageBlock({ block, onChange }: ImageBlockProps) {
   return (
     <div className="editor-block">
       <label className="editor-block__label">URL изображения</label>
+      {/* type="text", а не "url": загруженные файлы имеют относительный путь
+          /uploads/... который браузер отклоняет в type="url" («Please enter a URL»). */}
       <input
         className="editor-block__input"
-        type="url"
+        type="text"
         value={block.url ?? ''}
         onChange={(e) => handleChange({ url: e.target.value })}
         placeholder="https://... или /uploads/photo.jpg"
