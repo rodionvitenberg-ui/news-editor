@@ -2,8 +2,9 @@
  * Файл: controllers/news.controller.js
  * Бизнес-логика новостей: создание, чтение, обновление, удаление + публикация.
  *
- * Все маршруты защищены middleware'ом authMiddleware (см. news.routes.js),
- * поэтому req.user.userId уже содержит id автора из проверенного JWT.
+ * Маршруты записи (POST/PUT/DELETE) защищены authMiddleware — req.user.userId
+ * содержит id автора из проверенного JWT. Маршруты чтения (GET) защищены
+ * optionalAuthMiddleware: req.user есть только если прислан валидный токен.
  *
  * Логика отложенной публикации (см. ADR docs/adr/0001-scheduled-publication-as-data.md):
  * - «опубликовать сейчас» → status: 'published', publishAt: now;
@@ -86,12 +87,20 @@ async function createNews(req, res) {
  * - Без параметра (публичный список): только опубликованные с наступившей датой.
  *   Пагинация ?page=1&limit=10.
  *
- * @param {import('express').Request} req — query: all, page, limit
+ * Маршрут защищён optionalAuthMiddleware: req.user есть только если прислан
+ * валидный JWT. Гости получают публичный список, ?all=1 без токена — 401.
+ *
+ * @param {import('express').Request} req — query: all, page, limit; req.user (опц.)
  * @param {import('express').Response} res — ответ
  */
 async function getNews(req, res) {
   try {
     const { all } = req.query;
+    // ?all=1 — это «свои новости»: запрос требует авторизации.
+    // Токен не прислан/невалиден → req.user отсутствует → 401.
+    if (all === '1' && !req.user) {
+      return res.status(401).json({ message: 'Доступ запрещён: токен не передан' });
+    }
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
     const skip = (page - 1) * limit;
@@ -118,14 +127,20 @@ async function getNews(req, res) {
 }
 
 /**
- * GET /api/news/:id — одна новость по id.
+ * GET /api/news/:id — одна новость по id (публичный, optionalAuth).
  * - Автор видит любую свою новость (в том числе черновик).
- * - Все остальные — только опубликованную с наступившей датой.
+ * - Все остальные (включая гостей без токена) — только опубликованную.
  *
- * @param {import('express').Request} req — params.id, req.user.userId
+ * @param {import('express').Request} req — params.id, req.user (опц.)
  * @param {import('express').Response} res — ответ
  */
 async function getNewsById(req, res) {
+  // ObjectId неизвестного формата (CastError) сразу превращаем в 404 —
+  // это пользовательская ошибка, а не сбой сервера.
+  if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+    return res.status(404).json({ message: 'Новость не найдена' });
+  }
+
   try {
     const news = await News.findById(req.params.id);
 
@@ -133,7 +148,9 @@ async function getNewsById(req, res) {
       return res.status(404).json({ message: 'Новость не найдена' });
     }
 
-    const isOwner = news.author.toString() === req.user.userId;
+    // Автор может быть и гостем (req.user может отсутствовать) —
+    // isOwner истинно только если токен прислан и userId совпадает.
+    const isOwner = Boolean(req.user && news.author.toString() === req.user.userId);
 
     // Если не автор — проверяем опубликована ли и наступила ли дата.
     const isPublic = news.status === 'published' && news.publishAt <= new Date();
@@ -157,6 +174,11 @@ async function getNewsById(req, res) {
  * @param {import('express').Response} res — ответ
  */
 async function updateNews(req, res) {
+  // Невалидный формат id — это «не найдено», а не 500.
+  if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+    return res.status(404).json({ message: 'Новость не найдена' });
+  }
+
   try {
     const news = await News.findById(req.params.id);
 
@@ -223,6 +245,11 @@ async function updateNews(req, res) {
  * @param {import('express').Response} res — ответ
  */
 async function deleteNews(req, res) {
+  // Невалидный формат id — это «не найдено», а не 500.
+  if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+    return res.status(404).json({ message: 'Новость не найдена' });
+  }
+
   try {
     const news = await News.findById(req.params.id);
 

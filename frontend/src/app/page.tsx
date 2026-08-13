@@ -26,29 +26,43 @@ export default function HomePage() {
   const [view, setView] = useState<ViewMode>('all');
   const [news, setNews] = useState<News[]>([]);
   const [error, setError] = useState('');
+
   const [loading, setLoading] = useState(true);
+
+  /** Обработчик переключения вкладки: сразу сбрасываем данные на «загрузку». */
+  const switchView = (next: ViewMode) => {
+    setView(next);
+    setNews([]);
+    setError('');
+    setLoading(true);
+  };
 
   /**
    * Загрузка списка. Вкладка «Мои» доступна только авторизованным.
-   * При переключении вкладки сбрасываем старый список (чтобы не мелькали
-   * чужие карточки) и показываем «Загрузка...».
+   * effect перезапускается при смене вкладки или пользователя.
    */
   useEffect(() => {
-    setLoading(true);
-    setError('');
-
-    // «Мои» без токена невозможны — принудительно показываем публичный список.
+    // «Мои» без токена невозможны — грузим публичный список (без setState-в-эффекте).
+    // Кнопки «Мои» видны только авторизованным, так что для гостей view всегда 'all'.
     const effectiveView: ViewMode = view === 'mine' && !user ? 'all' : view;
-    if (effectiveView !== view) {
-      setView('all');
-      return;
-    }
+
+    let cancelled = false;
 
     apiClient
       .get<NewsListResponse>(effectiveView === 'mine' ? '/api/news?all=1' : '/api/news')
-      .then(({ data }) => setNews(data.news))
-      .catch(() => setError('Не удалось загрузить новости'))
-      .finally(() => setLoading(false));
+      .then(({ data }) => {
+        if (!cancelled) setNews(data.news);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Не удалось загрузить новости');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [view, user]);
 
   /** Убираем карточку из списка после удаления/публикации. */
@@ -68,14 +82,14 @@ export default function HomePage() {
             <button
               type="button"
               className={`btn ${view === 'all' ? 'btn--primary' : 'btn--secondary'}`}
-              onClick={() => setView('all')}
+              onClick={() => switchView('all')}
             >
               Все
             </button>
             <button
               type="button"
               className={`btn ${view === 'mine' ? 'btn--primary' : 'btn--secondary'}`}
-              onClick={() => setView('mine')}
+              onClick={() => switchView('mine')}
             >
               Мои
             </button>

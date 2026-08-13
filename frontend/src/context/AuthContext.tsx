@@ -35,35 +35,50 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
  * Провайдер: оборачивает приложение и предоставляет состояние авторизации.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // Ленивая инициализация из localStorage — чтение во время рендера,
+  // а не синхронный setState внутри эффекта (правило set-state-in-effect).
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(TOKEN_KEY);
+  });
+
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // При монтировании (в браузере) пробуем восстановить сессию из localStorage.
+  // loading=true только если есть токен, который нужно проверить на бэкенде.
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(localStorage.getItem(TOKEN_KEY));
+  });
+
+  // При монтировании (в браузере): если токен есть — проверяем его на бэкенде.
+  // Все setState находятся внутри колбэков промиса — синхронного вызова
+  // прямо в теле эффекта нет (соответствует react-hooks/set-state-in-effect).
   useEffect(() => {
-    // Если localStorage недоступен (SSR) — просто выходим.
-    if (typeof window === 'undefined') return;
+    if (!token) return;
 
-    const savedToken = localStorage.getItem(TOKEN_KEY);
-    if (!savedToken) {
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    // Токен есть — проверяем его на бэкенде: GET /api/auth/me.
-    // (axios-интерцептор сам добавит Authorization: Bearer <savedToken>.)
-    setToken(savedToken);
+    // axios-интерцептор сам добавит Authorization: Bearer <token>.
     apiClient
       .get<MeResponse>('/api/auth/me')
-      .then(({ data }) => setUser(data.user))
+      .then(({ data }) => {
+        if (!cancelled) setUser(data.user);
+      })
       .catch(() => {
         // Токен невалиден/истёк — стираем его.
+        if (cancelled) return;
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
         setUser(null);
       })
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // Сохраняем и токен, и пользователя после успешной авторизации.
   const setAuthData = useCallback((data: AuthResponse) => {

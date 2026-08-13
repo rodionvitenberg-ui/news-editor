@@ -15,18 +15,27 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Navigation } from '../../components/Navigation';
 import { Editor } from '../../components/editor/Editor';
 import { useAuth } from '../../context/AuthContext';
 import { apiClient } from '../../api/client';
 import type { News, NewsResponse } from '../../types/api';
 
+/** Возвращает id новости из query-строки (или null). Только в браузере. */
+function getEditorId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('id');
+}
+
 export default function EditorPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [initialNews, setInitialNews] = useState<News | undefined>(undefined);
-  const [loadingNews, setLoadingNews] = useState(false);
+  // Ленивая инициализация: если в URL есть ?id=..., загрузка уже идёт —
+  // это убирает синхронный setLoadingNews(true) из тела эффекта.
+  const [loadingNews, setLoadingNews] = useState(() => Boolean(getEditorId()));
   const [newsError, setNewsError] = useState('');
   const [savedId, setSavedId] = useState<string | null>(null);
 
@@ -40,28 +49,36 @@ export default function EditorPage() {
 
   // Если в URL есть ?id=... — загружаем новость для редактирования.
   // Бэкенд отдаёт новость только её автору (иначе 403), поэтому чужие
-  // черновики здесь не появятся.
+  // черновики здесь не появятся. Все setState вызываются в колбэках
+  // промиса — синхронного вызова в теле эффекта нет.
   useEffect(() => {
     if (!user) return;
 
-    const search = new URLSearchParams(window.location.search);
-    const id = search.get('id');
-
+    const id = getEditorId();
     if (!id) {
       // Нет id — режим создания, initialNews остаётся undefined.
       return;
     }
 
-    setLoadingNews(true);
-    setNewsError('');
+    let cancelled = false;
+
     apiClient
       .get<NewsResponse>(`/api/news/${id}`)
-      .then(({ data }) => setInitialNews(data.news))
+      .then(({ data }) => {
+        if (!cancelled) setInitialNews(data.news);
+      })
       .catch((err) => {
+        if (cancelled) return;
         const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
         setNewsError(message || 'Не удалось загрузить новость для редактирования');
       })
-      .finally(() => setLoadingNews(false));
+      .finally(() => {
+        if (!cancelled) setLoadingNews(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   if (authLoading || !user) {
@@ -95,9 +112,9 @@ export default function EditorPage() {
         {newsError ? (
           <div className="editor">
             <p className="error-text">{newsError}</p>
-            <a href="/" className="btn btn--secondary" style={{ marginTop: 16 }}>
+            <Link href="/" className="btn btn--secondary" style={{ marginTop: 16 }}>
               Вернуться к новостям
-            </a>
+            </Link>
           </div>
         ) : (
           <>

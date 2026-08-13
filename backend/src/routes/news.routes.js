@@ -11,26 +11,20 @@
 const express = require('express');
 const newsController = require('../controllers/news.controller');
 const authMiddleware = require('../middleware/auth.middleware');
+const optionalAuthMiddleware = require('../middleware/optionalAuth.middleware');
 
 const router = express.Router();
 
-// authMiddleware применяется ко ВСЕМ маршрутам этого роутера сразу:
-// router.use(...) — «навесить middleware на каждый запрос этого роутера».
-router.use(authMiddleware);
+// СТРОГО защищённые маршруты (создание/изменение/удаление) — только авторизованные.
+// ТЗ: «Авторизованному пользователю доступны endpoints для сущности news
+// (должен быть middleware, в котором будет проверка валидного токена)».
+router.post('/', authMiddleware, newsController.createNews);
+router.put('/:id', authMiddleware, newsController.updateNews);
+router.delete('/:id', authMiddleware, newsController.deleteNews);
 
-// Создать новость.
-router.post('/', newsController.createNews);
-
-// Список новостей (?all=1 — только свои; без параметра — только опубликованные).
-router.get('/', newsController.getNews);
-
-// Одна новость по id.
-router.get('/:id', newsController.getNewsById);
-
-// Обновить новость (только автор).
-router.put('/:id', newsController.updateNews);
-
-// Удалить новость (только автор).
-router.delete('/:id', newsController.deleteNews);
+// ПУБЛИЧНЫЕ чтения — optionalAuth: гостям доступен опубликованный список/новость,
+// а с валидным токеном контроллер дополнительно обработает ?all=1 и черновики автора.
+router.get('/', optionalAuthMiddleware, newsController.getNews);
+router.get('/:id', optionalAuthMiddleware, newsController.getNewsById);
 
 module.exports = router;
