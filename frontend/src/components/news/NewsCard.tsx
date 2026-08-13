@@ -7,8 +7,8 @@
  *   «Редактировать», «Опубликовать», «Удалить».
  *
  * Статус выводится по правилам ADR 0001 (публикация = данные, а не таймер):
- * - status === 'published' → «Опубликовано»;
- * - status === 'draft' и publishAt в будущем → «Отложено»;
+ * - publishAt в будущем → «Отложено» (скрыта до наступления даты);
+ * - иначе status === 'published' → «Опубликовано»;
  * - иначе → «Черновик».
  */
 
@@ -28,16 +28,16 @@ interface NewsCardProps {
 
 /** Возвращает текст и класс бейджа статуса по правилам ADR 0001. */
 function getStatusBadge(item: News): { label: string; className: string } {
-  // Опубликованные — только те, у кого status 'published' (дата уже наступила
-  // в момент чтения, иначе бэкенд не вернул бы её в публичный список).
-  if (item.status === 'published') {
-    return { label: 'Опубликовано', className: 'badge badge--published' };
-  }
-
-  // Черновик с будущей датой публикации — «отложено».
+  // «Отложено» — будущая дата публикации. Отложенные статьи имеют status
+  // 'published', но скрыты до наступления даты — поэтому проверяем дату ПЕРВОЙ.
   const publishAt = new Date(item.publishAt).getTime();
   if (!Number.isNaN(publishAt) && publishAt > Date.now()) {
     return { label: 'Отложено', className: 'badge badge--scheduled' };
+  }
+
+  // Опубликовано — дата наступила и status published.
+  if (item.status === 'published') {
+    return { label: 'Опубликовано', className: 'badge badge--published' };
   }
 
   return { label: 'Черновик', className: 'badge badge--draft' };

@@ -7,9 +7,10 @@
  * optionalAuthMiddleware: req.user есть только если прислан валидный токен.
  *
  * Логика отложенной публикации (см. ADR docs/adr/0001-scheduled-publication-as-data.md):
- * - «опубликовать сейчас» → status: 'published', publishAt: now;
- * - «отложить на дату» → status: 'draft', publishAt: будущая дата;
- * - при чтении публикуемыми считаются: status === 'published' && publishAt <= now.
+ * «Публикация — данные, а не таймер»: новость с любой датой publishAt имеет
+ * status: 'published', а до наступления этой даты её скрывает публичный фильтр
+ * (status === 'published' && publishAt <= now). Черновик (status: 'draft')
+ * никогда не попадает в публичный список.
  */
 
 const News = require('../models/News');
@@ -31,10 +32,12 @@ async function createNews(req, res) {
       return res.status(400).json({ message: 'Заголовок обязателен' });
     }
 
-    // Логика публикации:
-    // 1) publishNow: true — публикуем немедленно (status: 'published', publishAt: now)
-    // 2) publishAt — будущая дата от автора → отложенная публикация (status: 'draft')
-    // 3) ни то, ни другое — черновик с датой "сейчас" (publishAt: now по default схемы)
+    // Логика публикации (семантика ADR 0001 — «публикация — данные, а не таймер»):
+    // 1) publishNow: true → status: 'published', publishAt: now;
+    // 2) publishAt указана (любая дата) → status: 'published', publishAt = дата.
+    //    Пока дата в будущем, публичный фильтр (status published && publishAt <= now)
+    //    скрывает новость — это и есть «отложенная публикация»;
+    // 3) ни то, ни другое → обычный черновик: status: 'draft' (никогда не публикуется).
     const isPublishedNow = publishNow === true;
 
     // Если хотим опубликовать сейчас — ставим дату сейчас; иначе берём дату из запроса
@@ -52,11 +55,13 @@ async function createNews(req, res) {
     }
 
     // Собираем данные для создания.
+    // ВАЖНО: наличие publishDate (сейчас/прошлое/будущее) означает, что новость
+    // «опубликована»; будущая дата скрывает её до наступления момента.
     const newsData = {
       title: title.trim(),
       blocks,
       author: req.user.userId, // из проверенного токена
-      status: isPublishedNow ? 'published' : 'draft',
+      status: publishDate ? 'published' : 'draft',
     };
 
     // publishDate ставим только если она определена, иначе — default схемы (Date.now).
@@ -203,11 +208,12 @@ async function updateNews(req, res) {
       news.blocks = blocks;
     }
 
-    // Логика смены статуса при редактировании:
-    // - publishNow: true — немедленная публикация;
-    // - publishAt указан — отложенная публикация: сбрасываем статус на draft,
-    //   но фильтр при чтении покажет после наступления даты;
-    // - publishNow и publishAt не переданы — статус не трогаем.
+    // Логика смены статуса при редактировании (ADR 0001):
+    // - publishNow: true — немедленная публикация: published, publishAt = now;
+    // - publishAt указан — новость «опубликована» с этой датой: status = published.
+    //   Будущая дата скрывает её до наступления (отложенная публикация);
+    // - ни publishNow, ни publishAt не переданы — статус и дату не трогаем
+    //   (например, редактор просто поправил заголовок/блоки).
     if (publishNow === true) {
       news.status = 'published';
       news.publishAt = new Date();
@@ -217,10 +223,7 @@ async function updateNews(req, res) {
         return res.status(400).json({ message: 'Некорректная дата публикации' });
       }
       news.publishAt = parsed;
-      // Если просят публикацию ПОЗЖЕ чем сейчас — это черновик ожидающий публикации.
-      if (parsed > new Date()) {
-        news.status = 'draft';
-      }
+      news.status = 'published';
     }
 
     const updated = await news.save();
