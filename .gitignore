@@ -1,0 +1,32 @@
+# ============================================
+# Зависимости
+node_modules/
+
+# Секреты и локальные env (НЕ пушить!)
+.env
+.env.local
+.env.production
+backend/atlas-credentials.env
+
+# Сборки
+.next/
+out/
+build/
+dist/
+
+# Загруженные файлы: содержимое не храним, папку и якорь оставляем
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Логи
+*.log
+npm-debug.log*
+
+# Файлы ОС
+.DS_Store
+Thumbs.db
+
+# Редакторы
+.idea/
+.vscode/*
+!.vscode/extensions.json
