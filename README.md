@@ -203,7 +203,7 @@ cp .env.example .env
 #   MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/db?retryWrites=true&w=majority
 #   JWT_SECRET=длинная_случайная_строка
 #   JWT_EXPIRES_IN=7d
-#   CORS_ORIGIN=http://localhost:5173
+#   CORS_ORIGIN=http://localhost:3000
 
 npm run dev
 ```
@@ -227,7 +227,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Открой http://localhost:5173 — регистрируйся, создавай новости, смотри колокольчик.
+Открой http://localhost:3000 — регистрируйся, создавай новости, смотри колокольчик.
 
 ### Проверка E2E-сценария руками
 

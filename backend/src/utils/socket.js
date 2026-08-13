@@ -25,7 +25,7 @@ function initIO(server) {
   io = new Server(server, {
     cors: {
       // Разрешаем подключения клиентов с того же домена, что и CORS для API.
-      // В dev — Vite на localhost:5173.
+      // В dev — Next.js на localhost:3000.
       origin: process.env.CORS_ORIGIN || '*',
     },
   });
