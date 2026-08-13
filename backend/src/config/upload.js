@@ -4,8 +4,9 @@
  *
  * Чего мы добиваемся:
  * - сохраняем файлы в папку uploads/;
- * - ограничиваем размер файла 5 МБ (предел, чтобы не «уронить» сервер);
- * - разрешаем только нужные типы: картинки, PDF и офисные документы.
+ * - ограничиваем размер файла (видео весит больше картинок/документов);
+ * - разрешаем нужные типы: изображения, видео, PDF, офисные документы,
+ *   а также text/markdown (файлы .md).
  */
 
 const multer = require('multer');
@@ -54,13 +55,25 @@ const storage = multer.diskStorage({
 const fileFilter = (req, file, callback) => {
   // Список разрешённых MIME-типов.
   const allowed = [
+    // Изображения
     'image/jpeg', // .jpg .jpeg
     'image/png', // .png
     'image/webp', // .webp
     'image/gif', // .gif
+
+    // Документы
     'application/pdf', // .pdf
     'application/msword', // .doc
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+
+    // Видео
+    'video/mp4', // .mp4
+    'video/webm', // .webm
+    'video/quicktime', // .mov
+
+    // Текст / Markdown
+    'text/plain', // .txt
+    'text/markdown', // .md
   ];
 
   if (allowed.includes(file.mimetype)) {
@@ -77,13 +90,15 @@ const fileFilter = (req, file, callback) => {
 };
 
 /**
- * Готовая конфигурация multer: хранилище + фильтр + лимит размера 5 МБ.
+ * Готовая конфигурация multer: хранилище + фильтр + лимит размера 50 МБ.
  * Её используем в маршруте /api/upload как middleware.
  */
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 МБ
+  // 50 МБ: картинки маленькие, но видео/mov занимают больше — не блокируем
+  // загрузку типичного ролика, но защищаем сервер от безразмерных файлов.
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 module.exports = upload;
